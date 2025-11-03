@@ -5,9 +5,9 @@ def lambda_handler(event, context):
     常に固定のメモ一覧を返す関数。
     """
     mock_memos = [
-        {'id': '1', 'content': 'CDハンズオンの準備をする'},
-        {'id': '2', 'content': 'Reactのコンポーネントを修正する'},
-        {'id': '3', 'content': 'デプロイパイプラインを動かしてみる'}
+        {'id': '1', 'content': 'APIの実装をする'},
+        {'id': '2', 'content': 'フロントエンドの実装をする'},
+        {'id': '3', 'content': 'CI/CDの設定をする'},
     ]
 
     return {

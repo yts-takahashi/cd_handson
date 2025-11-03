@@ -3,14 +3,22 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   A simple Mock Memo API for the CD hands-on.
 
+# API Gateway全体にCORS設定
+Globals:
+  Api:
+    Cors:
+      AllowOrigin: "'*'"
+      AllowMethods: "'GET,POST,OPTIONS'"
+      AllowHeaders: "'Content-Type'"
+
 Resources:
-  # メモを追加するフリをするLambda関数 (POST /memos)
+  # メモを追加するLambda関数 (POST /memos)
   AddMemoFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
       Handler: add_memo.lambda_handler
-      Runtime: python3.13
+      Runtime: python3.11
       Events:
         AddMemo:
           Type: Api
@@ -18,13 +26,13 @@ Resources:
             Path: /memos
             Method: post
 
-  # 固定のメモ一覧を返すLambda関数 (GET /memos)
+  # メモ一覧を返すLambda関数 (GET /memos)
   ListMemosFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
       Handler: list_memos.lambda_handler
-      Runtime: python3.13
+      Runtime: python3.11
       Events:
         ListMemos:
           Type: Api
@@ -32,8 +40,65 @@ Resources:
             Path: /memos
             Method: get
 
+  # --- フロントエンド用リソース ---
+  FrontendS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # 静的ウェブサイトホスティングの設定
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+        
+  FrontendS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendS3Bucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*" # 全員に読み取りを許可
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${FrontendS3Bucket}/*"
+
+  FrontendCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !Sub "FrontendS3Bucket.s3-website-${AWS::Region}.amazonaws.com"
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          AllowedMethods: ["GET", "HEAD", "OPTIONS"]
+          CachedMethods: ["GET", "HEAD", "OPTIONS"]
+          ForwardedValues:
+            QueryString: false
+
 Outputs:
-  # API GatewayのURLを出力
   MemoApiUrl:
     Description: "API Gateway endpoint URL for Mock Memo API"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/memos"
+  
+  S3BucketName:
+    Description: "S3 Bucket Name for Frontend"
+    Value: !Ref FrontendS3Bucket
+
+  CloudFrontDistributionId:
+    Description: "CloudFront Distribution ID for Frontend"
+    Value: !Ref FrontendCloudFrontDistribution
+
+  CloudFrontDomainName:
+    Description: "Domain name for CloudFront Distribution"
+    Value: !GetAtt FrontendCloudFrontDistribution.DomainName
