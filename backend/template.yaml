@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  A simple Mock Memo API for the CD hands-on.
+
+Resources:
+  # メモを追加するフリをするLambda関数 (POST /memos)
+  AddMemoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: add_memo.lambda_handler
+      Runtime: python3.13
+      Events:
+        AddMemo:
+          Type: Api
+          Properties:
+            Path: /memos
+            Method: post
+
+  # 固定のメモ一覧を返すLambda関数 (GET /memos)
+  ListMemosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: list_memos.lambda_handler
+      Runtime: python3.13
+      Events:
+        ListMemos:
+          Type: Api
+          Properties:
+            Path: /memos
+            Method: get
+
+Outputs:
+  # API GatewayのURLを出力
+  MemoApiUrl:
+    Description: "API Gateway endpoint URL for Mock Memo API"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/memos"
