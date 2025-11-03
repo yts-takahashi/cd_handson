@@ -1,0 +1,91 @@
+name: Deploy Production Infra and App
+
+on:
+  push:
+    branches:
+      - main # mainブランチに変更
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-infra:
+    runs-on: ubuntu-latest
+    outputs:
+      apiUrl: ${{ steps.get-outputs.outputs.apiUrl }}
+      s3BucketName: ${{ steps.get-outputs.outputs.s3BucketName }}
+      cfDistId: ${{ steps.get-outputs.outputs.cfDistId }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-1
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup SAM
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Deploy Infrastructure
+        run: |
+          cd backend
+          sam build
+          sam deploy --no-confirm-changeset --stack-name production-fullstack-handson --capabilities CAPABILITY_IAM --no-fail-on-empty-changeset --region ap-northeast-1
+      
+      - name: Get Stack Outputs
+        id: get-outputs
+        run: |
+          STACK_NAME="production-fullstack-handson"
+          OUTPUTS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs" --output json)
+
+          API_URL=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="MemoApiUrl").OutputValue')          
+          S3_BUCKET_NAME=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="S3BucketName").OutputValue')
+          CF_DIST_ID=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="CloudFrontDistributionId").OutputValue')
+          
+          echo "apiUrl=$API_URL" >> "$GITHUB_OUTPUT"
+          echo "s3BucketName=$S3_BUCKET_NAME" >> "$GITHUB_OUTPUT"
+          echo "cfDistId=$CF_DIST_ID" >> "$GITHUB_OUTPUT"
+
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    needs: deploy-infra
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build and Deploy Frontend App
+        env:
+          VITE_API_URL: ${{ needs.deploy-infra.outputs.apiUrl }}
+          S3_BUCKET_NAME: ${{ needs.deploy-infra.outputs.s3BucketName }}
+          CLOUDFONT_DISTRIBUTION_ID: ${{ needs.deploy-infra.outputs.cfDistId }}
+        run: |
+          echo "API URL for this build is: $VITE_API_URL"
+          cd frontend
+          npm install
+          # ビルド時にVITE_API_URLが使われる
+          npm run build
+          # runブロック内ではシェルの変数として参照
+          aws s3 sync ./dist s3://${S3_BUCKET_NAME} --delete
+          aws cloudfront create-invalidation \
+            --distribution-id ${CLOUDFONT_DISTRIBUTION_ID} \
+            --paths "/*"

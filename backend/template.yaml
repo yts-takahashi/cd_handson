@@ -25,6 +25,9 @@ Resources:
           Properties:
             Path: /memos
             Method: post
+      AutoPublishAlias: prod
+      DeploymentPreference:
+        Type: Canary10Percent5Minutes
 
   # メモ一覧を返すLambda関数 (GET /memos)
   ListMemosFunction:
@@ -39,6 +42,9 @@ Resources:
           Properties:
             Path: /memos
             Method: get
+      AutoPublishAlias: prod
+      DeploymentPreference:
+        Type: Canary10Percent5Minutes
 
   # --- フロントエンド用リソース ---
   FrontendS3Bucket:
