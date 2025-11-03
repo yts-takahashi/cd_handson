@@ -4,11 +4,7 @@ def lambda_handler(event, context):
     """
     常に固定のメモ一覧を返す関数。
     """
-    mock_memos = [
-        {'id': '1', 'content': 'APIの実装をする'},
-        {'id': '2', 'content': 'フロントエンドの実装をする'},
-        {'id': '3', 'content': 'CI/CDの設定をする'},
-    ]
+    mock_memos = generate_random_memos(5)
 
     return {
         'statusCode': 200,
@@ -19,3 +15,13 @@ def lambda_handler(event, context):
         },
         'body': json.dumps(mock_memos)
     }
+
+def generate_random_memos(n):
+    import random
+    import string
+
+    memos = []
+    for i in range(n):
+        content = ''.join(random.choices(string.ascii_letters + string.digits, k=20))
+        memos.append({'id': str(i + 1), 'content': content})
+    return memos
